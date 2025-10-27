@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { ArrowLeft, Plus, Trash2, Save, X } from 'lucide-react'
@@ -8,7 +8,16 @@ import toast from 'react-hot-toast'
 const AddProduct = () => {
   const navigate = useNavigate()
   const inventoryStore = useInventoryStore()
-  const { addProduct, isReferenceUnique } = inventoryStore
+  const { 
+    addProduct, 
+    isReferenceUnique,
+    categories,
+    materials,
+    colors,
+    fetchProductOptions,
+    isLoadingOptions
+  } = inventoryStore
+  
   const {
     register,
     control,
@@ -45,10 +54,12 @@ const AddProduct = () => {
   const salePrice = watch('salePrice')
   const sizes = watch('sizes')
 
-  // Opciones de datos
-  const categories = ['Formal', 'Casual', 'Deportivo', 'Botas', 'Sandalias']
-  const materials = ['Cuero Genuino', 'Cuero Sintético', 'Lona', 'Sintético', 'Gamuza']
-  const colors = ['Negro', 'Marrón', 'Blanco', 'Beige', 'Gris', 'Azul', 'Rojo', 'Otro']
+  // Cargar opciones del producto al montar el componente
+  useEffect(() => {
+    fetchProductOptions()
+  }, [])
+
+  // Opciones de datos - ya no son estáticos, vienen del store
   const shoesSizes = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45']
 
   // Calcular margen de ganancia
@@ -200,7 +211,7 @@ const AddProduct = () => {
                     {...register('reference', {
                       required: 'La referencia es requerida',
                       pattern: {
-                        value: /^[A-Z0-9]+$/,
+                        value: /^[A-Za-z0-9.-]+$/,
                         message: 'Solo letras mayúsculas y números'
                       },
                       validate: value => {
@@ -258,6 +269,7 @@ const AddProduct = () => {
                     required: 'Selecciona una categoría'
                   })}
                   className={`select ${errors.category ? 'input-error' : ''}`}
+                  disabled={isLoadingOptions}
                 >
                   <option value="">Seleccionar categoría</option>
                   {categories.map(category => (
@@ -279,6 +291,7 @@ const AddProduct = () => {
                     required: 'Selecciona un material'
                   })}
                   className={`select ${errors.material ? 'input-error' : ''}`}
+                  disabled={isLoadingOptions}
                 >
                   <option value="">Seleccionar material</option>
                   {materials.map(material => (
@@ -300,6 +313,7 @@ const AddProduct = () => {
                     required: 'Selecciona un color'
                   })}
                   className={`select ${errors.color ? 'input-error' : ''}`}
+                  disabled={isLoadingOptions}
                 >
                   <option value="">Seleccionar color</option>
                   {colors.map(color => (

@@ -13,7 +13,17 @@ const EditProduct = () => {
   const inventoryStore = useInventoryStore()
   
   // Extraer las funciones del store
-  const { getProductById, updateProduct, isReferenceUnique, isLoading } = inventoryStore
+  const { 
+    getProductById, 
+    updateProduct, 
+    isReferenceUnique, 
+    isLoading,
+    categories,
+    materials,
+    colors,
+    fetchProductOptions,
+    isLoadingOptions
+  } = inventoryStore
   
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -39,14 +49,17 @@ const EditProduct = () => {
   const salePrice = watch('salePrice')
   const sizes = watch('sizes') || []
 
-  // Opciones de datos
-  const categories = ['Formal', 'Casual', 'Deportivo', 'Botas', 'Sandalias']
-  const materials = ['Cuero Genuino', 'Cuero Sintético', 'Lona', 'Sintético', 'Gamuza']
-  const colors = ['Negro', 'Marrón', 'Blanco', 'Beige', 'Gris', 'Azul', 'Rojo', 'Otro']
+  // Opciones de datos - ahora vienen del store
   const shoesSizes = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45']
 
   useEffect(() => {
-    loadProduct()
+    // Cargar opciones del producto y el producto específico
+    const loadData = async () => {
+      await fetchProductOptions()
+      loadProduct()
+    }
+    
+    loadData()
   }, [id])
 
   const loadProduct = async () => {
@@ -247,7 +260,7 @@ const EditProduct = () => {
                   {...register('reference', {
                     required: 'La referencia es requerida',
                     pattern: {
-                      value: /^[A-Z0-9]+$/,
+                      value: /^[A-Za-z0-9.-]+$/,
                       message: 'Solo letras mayúsculas y números'
                     },
                     validate: value => {
@@ -297,6 +310,7 @@ const EditProduct = () => {
                     required: 'Selecciona una categoría'
                   })}
                   className={`select ${errors.category ? 'input-error' : ''}`}
+                  disabled={isLoadingOptions}
                 >
                   <option value="">Seleccionar categoría</option>
                   {categories.map(category => (
@@ -318,6 +332,7 @@ const EditProduct = () => {
                     required: 'Selecciona un material'
                   })}
                   className={`select ${errors.material ? 'input-error' : ''}`}
+                  disabled={isLoadingOptions}
                 >
                   <option value="">Seleccionar material</option>
                   {materials.map(material => (
@@ -339,6 +354,7 @@ const EditProduct = () => {
                     required: 'Selecciona un color'
                   })}
                   className={`select ${errors.color ? 'input-error' : ''}`}
+                  disabled={isLoadingOptions}
                 >
                   <option value="">Seleccionar color</option>
                   {colors.map(color => (

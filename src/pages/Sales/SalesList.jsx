@@ -12,7 +12,8 @@ import {
   Users,
   CreditCard,
   Printer,
-  Download
+  Download,
+  Banknote
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useSalesStore } from '../../store/salesStore'
@@ -100,6 +101,39 @@ const SalesList = () => {
     })
   }
 
+  const getPaymentMethodLabel = (method) => {
+    const labels = {
+      'CASH': 'Efectivo',
+      'CARD': 'Tarjeta',
+      'TRANSFER': 'Transferencia',
+      'MIXED': 'Mixto'
+    }
+    return labels[method] || method
+  }
+
+  // Función para obtener los métodos de pago de una venta
+  const getPaymentMethodsDisplay = (sale) => {
+    if (sale.isMixedPayment && sale.payments && sale.payments.length > 1) {
+      // Pago mixto con múltiples métodos
+      return sale.payments.map(payment => ({
+        method: payment.paymentMethod,
+        amount: payment.amount
+      }))
+    } else if (sale.payments && sale.payments.length > 0) {
+      // Un solo pago
+      return [{
+        method: sale.payments[0].paymentMethod,
+        amount: sale.payments[0].amount
+      }]
+    } else {
+      // Datos legacy (sin tabla sale_payments)
+      return [{
+        method: sale.paymentMethod,
+        amount: sale.total
+      }]
+    }
+  }
+
   const handleDeleteSale = async (saleId) => {
     if (window.confirm('¿Estás seguro de eliminar esta venta? Esta acción no se puede deshacer.')) {
       const result = await deleteSale(saleId)
@@ -127,7 +161,16 @@ const SalesList = () => {
     printWindow.document.close()
     printWindow.print()
   }
+
   const generatePrintContent = (sale) => {
+    const paymentMethods = getPaymentMethodsDisplay(sale)
+    const paymentsHtml = paymentMethods.map(payment => `
+      <div class="item">
+        <span>${getPaymentMethodLabel(payment.method)}:</span>
+        <span>${formatCurrency(payment.amount)}</span>
+      </div>
+    `).join('')
+
     return `
       <!DOCTYPE html>
       <html>
@@ -168,6 +211,11 @@ const SalesList = () => {
               padding-top: 10px; 
               margin-top: 10px; 
             }
+            .payment-section {
+              background: #f5f5f5;
+              padding: 5px;
+              margin: 5px 0;
+            }
             .footer { 
               text-align: center; 
               border-top: 1px dashed #000; 
@@ -179,13 +227,14 @@ const SalesList = () => {
         </head>
         <body>
           <div class="header">
-            <div class="title">SISTEMA ADMINISTRATIVO</div>
-            <div class="subtitle">Empresa de Calzado</div>
+            <div class="title">JOVITA CALZADO C-25</div>
+            <div class="subtitle">Sistema Administrativo</div>
             <div class="subtitle">Ticket de Venta</div>
           </div>
           
           <div class="section">
             <strong>Venta #${sale.id.toString().padStart(4, '0')}</strong><br>
+            ${sale.saleNumber ? `Número: ${sale.saleNumber}<br>` : ''}
             Fecha: ${formatDate(sale.createdAt)}<br>
             Empleado: ${sale.userName}
           </div>
@@ -233,10 +282,9 @@ const SalesList = () => {
           </div>
           
           <div class="section">
-            <strong>PAGO:</strong>
-            <div class="item">
-              <span>${sale.paymentMethod}:</span>
-              <span>${formatCurrency(sale.total)}</span>
+            <strong>PAGO${sale.isMixedPayment ? 'S' : ''}:</strong>
+            <div class="payment-section">
+              ${paymentsHtml}
             </div>
           </div>
           
@@ -256,6 +304,28 @@ const SalesList = () => {
     `
   }
 
+  // Calcular estadísticas de métodos de pago actualizadas
+  const calculatePaymentMethodStats = () => {
+    const methodStats = {}
+    
+    sales.forEach(sale => {
+      if (sale.payments && sale.payments.length > 0) {
+        // Usar datos de sale_payments
+        sale.payments.forEach(payment => {
+          const method = getPaymentMethodLabel(payment.paymentMethod)
+          methodStats[method] = (methodStats[method] || 0) + 1
+        })
+      } else if (sale.paymentMethod) {
+        // Datos legacy
+        const method = getPaymentMethodLabel(sale.paymentMethod)
+        methodStats[method] = (methodStats[method] || 0) + 1
+      }
+    })
+    
+    return methodStats
+  }
+
+  const paymentMethodStats = calculatePaymentMethodStats()
 
   return (
     <div className="space-y-6">
@@ -455,87 +525,103 @@ const SalesList = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentSales.map((sale) => (
-                    <tr key={sale.id}>
-                      <td className="font-mono font-medium text-primary-600">
-                        #{sale.id.toString().padStart(4, '0')}
-                      </td>
-                      <td>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {formatDate(sale.createdAt).split(',')[0]}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {formatDate(sale.createdAt).split(',')[1]}
-                          </p>
-                        </div>
-                      </td>
-                      <td>
-                        <div>
-                          <p className="font-medium text-gray-900">{sale.customerName}</p>
-                          <p className="text-sm text-gray-500">{sale.customerPhone}</p>
-                        </div>
-                      </td>
-                      <td>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {sale.items.length} producto{sale.items.length !== 1 ? 's' : ''}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {sale.items.reduce((sum, item) => sum + item.quantity, 0)} unidades
-                          </p>
-                        </div>
-                      </td>
-                      <td className="font-medium text-gray-900">
-                        {formatCurrency(sale.total)}
-                      </td>
-                      <td>
-                        <span className="badge badge-secondary text-xs">
-                          {sale.paymentMethod === 'CASH' ? 'Efectivo' :
-                           sale.paymentMethod === 'CARD' ? 'Tarjeta' :
-                           sale.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'Mixto'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${
-                          sale.status === 'COMPLETED' ? 'badge-success' :
-                          sale.status === 'PENDING' ? 'badge-warning' :
-                          'badge-danger'
-                        }`}>
-                          {sale.status === 'COMPLETED' ? 'Completada' :
-                           sale.status === 'PENDING' ? 'Pendiente' : 'Cancelada'}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="flex space-x-2">
-                          <Link
-                            to={`/sales/${sale.id}`}
-                            className="btn btn-sm btn-secondary"
-                            title="Ver detalles"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                          <button
-                            onClick={() => printSale(sale)} 
-                            className="btn btn-sm btn-secondary"
-                            title="Imprimir ticket"
-                          >
-                            <Printer className="h-4 w-4" />
-                          </button>
-                          {isAdmin() && (
-                            <button
-                              onClick={() => handleDeleteSale(sale.id)}
-                              className="btn btn-sm btn-danger"
-                              disabled={isLoading}
-                              title="Eliminar venta"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                  {currentSales.map((sale) => {
+                    const paymentMethods = getPaymentMethodsDisplay(sale)
+                    return (
+                      <tr key={sale.id}>
+                        <td className="font-mono font-medium text-primary-600">
+                          #{sale.id.toString().padStart(4, '0')}
+                        </td>
+                        <td>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {formatDate(sale.createdAt).split(',')[0]}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatDate(sale.createdAt).split(',')[1]}
+                            </p>
+                          </div>
+                        </td>
+                        <td>
+                          <div>
+                            <p className="font-medium text-gray-900">{sale.customerName}</p>
+                            <p className="text-sm text-gray-500">{sale.customerPhone}</p>
+                          </div>
+                        </td>
+                        <td>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {sale.items.length} producto{sale.items.length !== 1 ? 's' : ''}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {sale.items.reduce((sum, item) => sum + item.quantity, 0)} unidades
+                            </p>
+                          </div>
+                        </td>
+                        <td className="font-medium text-gray-900">
+                          {formatCurrency(sale.total)}
+                        </td>
+                        <td>
+                          {sale.isMixedPayment ? (
+                            <div className="space-y-1">
+                              <span className="badge badge-warning text-xs flex items-center gap-1 w-fit">
+                                <CreditCard className="h-3 w-3" />
+                                Pago Mixto
+                              </span>
+                              <div className="text-xs text-gray-500">
+                                {paymentMethods.length} métodos
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="badge badge-secondary text-xs flex items-center gap-1 w-fit">
+                              {paymentMethods[0].method === 'CASH' && <Banknote className="h-3 w-3" />}
+                              {paymentMethods[0].method === 'CARD' && <CreditCard className="h-3 w-3" />}
+                              {paymentMethods[0].method === 'TRANSFER' && <DollarSign className="h-3 w-3" />}
+                              {getPaymentMethodLabel(paymentMethods[0].method)}
+                            </span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            sale.status === 'COMPLETED' ? 'badge-success' :
+                            sale.status === 'PENDING' ? 'badge-warning' :
+                            'badge-danger'
+                          }`}>
+                            {sale.status === 'COMPLETED' ? 'Completada' :
+                             sale.status === 'PENDING' ? 'Pendiente' : 'Cancelada'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex space-x-2">
+                            <Link
+                              to={`/sales/${sale.id}`}
+                              className="btn btn-sm btn-secondary"
+                              title="Ver detalles"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                            <button
+                              onClick={() => printSale(sale)} 
+                              className="btn btn-sm btn-secondary"
+                              title="Imprimir ticket"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
+                            {isAdmin() && (
+                              <button
+                                onClick={() => handleDeleteSale(sale.id)}
+                                className="btn btn-sm btn-danger"
+                                disabled={isLoading}
+                                title="Eliminar venta"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -583,17 +669,30 @@ const SalesList = () => {
               Anterior
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`btn btn-sm ${
-                  currentPage === i + 1 ? 'btn-primary' : 'btn-secondary'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum
+              if (totalPages <= 5) {
+                pageNum = i + 1
+              } else if (currentPage <= 3) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i
+              } else {
+                pageNum = currentPage - 2 + i
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`btn btn-sm ${
+                    currentPage === pageNum ? 'btn-primary' : 'btn-secondary'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
 
             <button
               onClick={() => setCurrentPage(currentPage + 1)}
@@ -610,35 +709,54 @@ const SalesList = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
           <div className="card-body">
-            <h4 className="text-sm font-medium text-gray-500 mb-3">Métodos de Pago</h4>
+            <h4 className="text-sm font-medium text-gray-500 mb-3 flex items-center">
+              <CreditCard className="h-4 w-4 mr-2" />
+              Métodos de Pago
+            </h4>
             <div className="space-y-2">
-              {Object.entries(stats.paymentMethods).map(([method, count]) => (
-                <div key={method} className="flex justify-between text-sm">
-                  <span className="text-gray-600">{method}:</span>
-                  <span className="font-medium">{count}</span>
-                </div>
-              ))}
+              {Object.keys(paymentMethodStats).length > 0 ? (
+                Object.entries(paymentMethodStats).map(([method, count]) => (
+                  <div key={method} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{method}:</span>
+                    <span className="font-medium">{count}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">Sin datos</p>
+              )}
             </div>
           </div>
         </div>
 
         <div className="card">
           <div className="card-body">
-            <h4 className="text-sm font-medium text-gray-500 mb-3">Top Productos</h4>
+            <h4 className="text-sm font-medium text-gray-500 mb-3 flex items-center">
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Top Productos
+            </h4>
             <div className="space-y-2">
-              {stats.topProducts.slice(0, 3).map((product) => (
-                <div key={product.reference} className="flex justify-between text-sm">
-                  <span className="text-gray-600 truncate">{product.name.substring(0, 20)}...</span>
-                  <span className="font-medium">{product.quantity}</span>
-                </div>
-              ))}
+              {stats.topProducts && stats.topProducts.length > 0 ? (
+                stats.topProducts.slice(0, 3).map((product, index) => (
+                  <div key={index} className="flex justify-between text-sm">
+                    <span className="text-gray-600 truncate max-w-[150px]" title={product.name}>
+                      {product.name.substring(0, 20)}{product.name.length > 20 ? '...' : ''}
+                    </span>
+                    <span className="font-medium">{product.quantity}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-400">Sin datos</p>
+              )}
             </div>
           </div>
         </div>
 
         <div className="card">
           <div className="card-body">
-            <h4 className="text-sm font-medium text-gray-500 mb-3">Resumen Rápido</h4>
+            <h4 className="text-sm font-medium text-gray-500 mb-3 flex items-center">
+              <DollarSign className="h-4 w-4 mr-2" />
+              Resumen Rápido
+            </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Promedio por venta:</span>
@@ -651,8 +769,10 @@ const SalesList = () => {
                 <span className="font-medium">{stats.todayStats.items}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Ventas activas:</span>
-                <span className="font-medium">{currentSales.filter(s => s.status === 'COMPLETED').length}</span>
+                <span className="text-gray-600">Ventas completadas:</span>
+                <span className="font-medium">
+                  {sales.filter(s => s.status === 'COMPLETED').length}
+                </span>
               </div>
             </div>
           </div>

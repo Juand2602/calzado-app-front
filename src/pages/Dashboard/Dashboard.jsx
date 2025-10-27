@@ -2,7 +2,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { 
-  Package, 
+  Package,
+  Truck,
   ShoppingCart, 
   DollarSign, 
   Users, 
@@ -413,13 +414,13 @@ const Dashboard = () => {
             </Link>
 
             <Link
-              to="/inventory/add"
+              to="/providers"
               className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors duration-200 group"
             >
               <div className="text-center">
-                <Package className="h-8 w-8 mx-auto text-gray-400 group-hover:text-primary-500" />
+                <Truck className="h-8 w-8 mx-auto text-gray-400 group-hover:text-primary-500" />
                 <p className="mt-2 text-sm font-medium text-gray-600 group-hover:text-primary-600">
-                  Agregar Producto
+                  Ver Proveedores
                 </p>
               </div>
             </Link>

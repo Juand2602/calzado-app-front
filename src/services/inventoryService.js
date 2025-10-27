@@ -235,6 +235,28 @@ export const inventoryService = {
       throw error
     }
   },
+// Agregar estos métodos al inventoryService.js
 
+// Obtener materiales
+getMaterials: async () => {
+  try {
+    const response = await api.get('/products/materials')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching materials:', error)
+    throw error
+  }
+},
+
+// Obtener colores
+getColors: async () => {
+  try {
+    const response = await api.get('/products/colors')
+    return response.data
+  } catch (error) {
+    console.error('Error fetching colors:', error)
+    throw error
+  }
+},
 
 }

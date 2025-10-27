@@ -11,7 +11,9 @@ import {
   CreditCard,
   Package,
   Receipt,
-  FileText
+  FileText,
+  DollarSign,
+  Banknote
 } from 'lucide-react'
 import { useSalesStore } from '../../store/salesStore'
 import { useAuthStore } from '../../store/authStore'
@@ -67,6 +69,16 @@ const SaleDetails = () => {
     })
   }
 
+  const getPaymentMethodLabel = (method) => {
+    const labels = {
+      'CASH': 'Efectivo',
+      'CARD': 'Tarjeta',
+      'TRANSFER': 'Transferencia',
+      'MIXED': 'Mixto'
+    }
+    return labels[method] || method
+  }
+
   const printSale = () => {
     const printContent = generatePrintContent(sale)
     const printWindow = window.open('', '_blank')
@@ -76,6 +88,21 @@ const SaleDetails = () => {
   }
 
   const generatePrintContent = (sale) => {
+    // Generar sección de pagos
+    const paymentsHtml = sale.payments && sale.payments.length > 0
+      ? sale.payments.map(payment => `
+          <div class="item">
+            <span>${getPaymentMethodLabel(payment.paymentMethod)}${payment.referenceNumber ? ` (${payment.referenceNumber})` : ''}:</span>
+            <span>${formatCurrency(payment.amount)}</span>
+          </div>
+        `).join('')
+      : `
+          <div class="item">
+            <span>${getPaymentMethodLabel(sale.paymentMethod)}:</span>
+            <span>${formatCurrency(sale.total)}</span>
+          </div>
+        `
+
     return `
       <!DOCTYPE html>
       <html>
@@ -116,6 +143,11 @@ const SaleDetails = () => {
               padding-top: 10px; 
               margin-top: 10px; 
             }
+            .payment-section {
+              background: #f5f5f5;
+              padding: 5px;
+              margin: 5px 0;
+            }
             .footer { 
               text-align: center; 
               border-top: 1px dashed #000; 
@@ -134,6 +166,7 @@ const SaleDetails = () => {
           
           <div class="section">
             <strong>Venta #${sale.id.toString().padStart(4, '0')}</strong><br>
+            ${sale.saleNumber ? `Número: ${sale.saleNumber}<br>` : ''}
             Fecha: ${formatDate(sale.createdAt)}<br>
             Empleado: ${sale.userName}
           </div>
@@ -181,10 +214,9 @@ const SaleDetails = () => {
           </div>
           
           <div class="section">
-            <strong>PAGO:</strong>
-            <div class="item">
-              <span>${sale.paymentMethod}:</span>
-              <span>${formatCurrency(sale.total)}</span>
+            <strong>PAGO${sale.isMixedPayment ? 'S' : ''}:</strong>
+            <div class="payment-section">
+              ${paymentsHtml}
             </div>
           </div>
           
@@ -276,10 +308,12 @@ const SaleDetails = () => {
                   <span className="font-medium text-gray-600">ID de Venta:</span>
                   <p className="text-gray-900 font-mono">#{sale.id.toString().padStart(4, '0')}</p>
                 </div>
-                <div>
-                  <span className="font-medium text-gray-600">Número de Venta:</span>
-                  <p className="text-gray-900 font-mono">{sale.saleNumber}</p>
-                </div>
+                {sale.saleNumber && (
+                  <div>
+                    <span className="font-medium text-gray-600">Número de Venta:</span>
+                    <p className="text-gray-900 font-mono">{sale.saleNumber}</p>
+                  </div>
+                )}
                 <div>
                   <span className="font-medium text-gray-600">Estado:</span>
                   <p>
@@ -302,11 +336,16 @@ const SaleDetails = () => {
                   <p className="text-gray-900">{sale.userName}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-600">Método de Pago:</span>
+                  <span className="font-medium text-gray-600">Tipo de Pago:</span>
                   <p className="text-gray-900">
-                    {sale.paymentMethod === 'CASH' ? 'Efectivo' :
-                     sale.paymentMethod === 'CARD' ? 'Tarjeta' :
-                     sale.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'Mixto'}
+                    {sale.isMixedPayment ? (
+                      <span className="badge badge-warning">
+                        <CreditCard className="h-3 w-3 inline mr-1" />
+                        Pago Mixto
+                      </span>
+                    ) : (
+                      getPaymentMethodLabel(sale.paymentMethod)
+                    )}
                   </p>
                 </div>
               </div>
@@ -446,17 +485,66 @@ const SaleDetails = () => {
               </div>
 
               <div className="border-t border-gray-200 pt-4">
-                <h4 className="font-medium text-gray-900 mb-2">Método de Pago</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      {sale.paymentMethod === 'CASH' ? 'Efectivo' :
-                       sale.paymentMethod === 'CARD' ? 'Tarjeta' :
-                       sale.paymentMethod === 'TRANSFER' ? 'Transferencia' : 'Mixto'}:
-                    </span>
-                    <span className="font-medium">{formatCurrency(sale.total)}</span>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Método{sale.isMixedPayment ? 's' : ''} de Pago
+                </h4>
+                
+                {sale.payments && sale.payments.length > 0 ? (
+                  <div className="space-y-3">
+                    {sale.payments.map((payment, index) => (
+                      <div 
+                        key={payment.id || index} 
+                        className="bg-gray-50 rounded-lg p-3 border border-gray-200"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            {payment.paymentMethod === 'CASH' && <Banknote className="h-4 w-4 text-green-600" />}
+                            {payment.paymentMethod === 'CARD' && <CreditCard className="h-4 w-4 text-blue-600" />}
+                            {payment.paymentMethod === 'TRANSFER' && <DollarSign className="h-4 w-4 text-purple-600" />}
+                            <span className="font-medium text-gray-900">
+                              {getPaymentMethodLabel(payment.paymentMethod)}
+                            </span>
+                          </div>
+                          <span className="font-bold text-gray-900">
+                            {formatCurrency(payment.amount)}
+                          </span>
+                        </div>
+                        
+                        {payment.referenceNumber && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            <span className="font-medium">Ref:</span> {payment.referenceNumber}
+                          </div>
+                        )}
+                        
+                        {payment.notes && (
+                          <div className="text-xs text-gray-600 mt-1 italic">
+                            {payment.notes}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {sale.isMixedPayment && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                        <p className="text-sm text-blue-700">
+                          <strong>Total pagado:</strong> {formatCurrency(
+                            sale.payments.reduce((sum, p) => sum + p.amount, 0)
+                          )}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">
+                        {getPaymentMethodLabel(sale.paymentMethod)}:
+                      </span>
+                      <span className="font-medium">{formatCurrency(sale.total)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -488,6 +576,14 @@ const SaleDetails = () => {
                   <span className="text-gray-600">% Descuento:</span>
                   <span className="font-medium text-red-600">
                     {((sale.discount / sale.subtotal) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
+              {sale.isMixedPayment && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Métodos de pago:</span>
+                  <span className="font-medium text-blue-600">
+                    {sale.payments ? sale.payments.length : 0}
                   </span>
                 </div>
               )}
